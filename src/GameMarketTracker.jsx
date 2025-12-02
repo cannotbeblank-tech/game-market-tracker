@@ -140,6 +140,7 @@ function buildItemsFromTrades(trades) {
         currency: t.currency || 'Adena',
         pricePerUnit: t.price || 0,
         quantity: t.quantity || 0,
+        created_at: t.created_at,
       }))
       .reverse();
 
@@ -207,7 +208,7 @@ const CustomTooltip = ({ active, payload, label, currencyLabel }) => {
               <p className="text-red-400">Максимум: {entry.value} {currencyLabel}</p>
             )}
             {entry.name === 'volume' && (
-              <p className="text-purple-400">Продано: {entry.value} шт</p>
+              <p className="text-purple-400">Всего: {entry.value} шт</p>
             )}
           </div>
         ))}
@@ -228,6 +229,7 @@ export default function GameMarketTracker() {
   const [usingDemoData, setUsingDemoData] = useState(false);
   const [selectedCurrency, setSelectedCurrency] = useState('adena');
   const [autoCurrencySet, setAutoCurrencySet] = useState(false);
+  const [listingSort, setListingSort] = useState({ field: 'pricePerUnit', direction: 'asc' });
 
   // Загрузка данных из Supabase с fallback на демо-данные
   useEffect(() => {
@@ -335,6 +337,23 @@ export default function GameMarketTracker() {
         console.error('Clipboard write failed', err);
       });
     }
+  };
+
+  const handleSortChange = (field) => {
+    setListingSort((prev) =>
+      prev.field === field
+        ? { field, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { field, direction: 'asc' }
+    );
+  };
+
+  const renderSortIcon = (field) => {
+    if (listingSort.field !== field) return <ChevronDown size={14} className="text-slate-500" />;
+    return listingSort.direction === 'asc' ? (
+      <ChevronUp size={14} className="text-blue-400" />
+    ) : (
+      <ChevronDown size={14} className="text-blue-400" />
+    );
   };
 
   if (loading) {
@@ -492,7 +511,7 @@ export default function GameMarketTracker() {
                                     avgPrice: 'Средняя цена',
                                     minPrice: 'Мин. цена',
                                     maxPrice: 'Макс. цена',
-                                    volume: 'Объём продаж',
+                                    volume: 'Объём',
                                   };
                                   return labels[value] || value;
                                 }}
@@ -530,7 +549,7 @@ export default function GameMarketTracker() {
                           </div>
                         </div>
                         <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-                          <div className="text-purple-400 text-sm mb-1">Всего продано</div>
+                          <div className="text-purple-400 text-sm mb-1">Всего</div>
                           <div className="text-slate-100 font-semibold">
                             {tradeData.reduce((sum, d) => sum + d.volume, 0)} шт
                           </div>
@@ -545,35 +564,65 @@ export default function GameMarketTracker() {
                               <tr className="border-b border-slate-700">
                                 <th className="text-left py-2 px-3 text-slate-400 font-medium">Продавец</th>
                                 <th className="text-left py-2 px-3 text-slate-400 font-medium">Валюта</th>
-                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Цена/шт</th>
-                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Количество</th>
-                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Всего</th>
+                                <th className="text-right py-2 px-3 text-slate-400 font-medium">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSortChange('pricePerUnit')}
+                                    className="inline-flex items-center gap-1 hover:text-slate-200 transition-colors"
+                                  >
+                                    Цена/шт {renderSortIcon('pricePerUnit')}
+                                  </button>
+                                </th>
+                                <th className="text-right py-2 px-3 text-slate-400 font-medium">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSortChange('quantity')}
+                                    className="inline-flex items-center gap-1 hover:text-slate-200 transition-colors"
+                                  >
+                                    Количество {renderSortIcon('quantity')}
+                                  </button>
+                                </th>
+                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Сумма</th>
+                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Дата проверки</th>
                               </tr>
                             </thead>
                             <tbody>
-                              {item.listings.map((listing, idx) => (
-                                <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/20">
-                                  <td className="py-2 px-3 text-slate-200">
-                                    <div className="flex items-center gap-2">
-                                      <span>{listing.seller}</span>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleCopyTarget(listing.seller)}
-                                        className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors"
-                                        title="Скопировать /target"
-                                      >
-                                        <Copy size={14} />
-                                      </button>
-                                    </div>
-                                  </td>
-                                  <td className="py-2 px-3 text-slate-300">{currencyLabel}</td>
-                                  <td className="py-2 px-3 text-right text-slate-200">{listing.pricePerUnit}</td>
-                                  <td className="py-2 px-3 text-right text-slate-200">{listing.quantity}</td>
-                                  <td className="py-2 px-3 text-right text-slate-100 font-semibold">
-                                    {listing.pricePerUnit * listing.quantity}
-                                  </td>
-                                </tr>
-                              ))}
+                              {[...item.listings]
+                                .sort((a, b) => {
+                                  const valueA = a[listingSort.field] ?? 0;
+                                  const valueB = b[listingSort.field] ?? 0;
+                                  if (valueA === valueB) return 0;
+                                  const multiplier = listingSort.direction === 'asc' ? 1 : -1;
+                                  return valueA > valueB ? multiplier : -multiplier;
+                                })
+                                .map((listing, idx) => (
+                                  <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                                    <td className="py-2 px-3 text-slate-200">
+                                      <div className="flex items-center gap-2">
+                                        <span>{listing.seller}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyTarget(listing.seller)}
+                                          className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors"
+                                          title="Скопировать /target"
+                                        >
+                                          <Copy size={14} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                    <td className="py-2 px-3 text-slate-300">{currencyLabel}</td>
+                                    <td className="py-2 px-3 text-right text-slate-200">{listing.pricePerUnit}</td>
+                                    <td className="py-2 px-3 text-right text-slate-200">{listing.quantity}</td>
+                                    <td className="py-2 px-3 text-right text-slate-100 font-semibold">
+                                      {listing.pricePerUnit * listing.quantity}
+                                    </td>
+                                    <td className="py-2 px-3 text-right text-slate-300">
+                                      {listing.created_at
+                                        ? new Date(listing.created_at).toLocaleString('ru-RU')
+                                        : '-'}
+                                    </td>
+                                  </tr>
+                                ))}
                             </tbody>
                           </table>
                         </div>
