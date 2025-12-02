@@ -54,6 +54,19 @@ function groupTradesByItem(trades) {
   return map;
 }
 
+function dedupeBySellerAndItem(trades) {
+  const latest = new Map();
+  for (const t of trades) {
+    const key = `${t.seller_name || ''}|||${t.item_name || ''}`;
+    const ts = new Date(t.created_at).getTime() || 0;
+    const prev = latest.get(key);
+    if (!prev || ts >= prev.ts) {
+      latest.set(key, { ts, trade: t });
+    }
+  }
+  return Array.from(latest.values()).map((v) => v.trade);
+}
+
 function formatLabel(date, rangeKey) {
   if (rangeKey === '7d' || rangeKey === '14d' || rangeKey === '30d') {
     return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
@@ -251,8 +264,9 @@ export default function GameMarketTracker() {
         
         // Если получили хотя бы 1 строку - используем реальные данные
         if (data && data.length > 0) {
-          console.log(`✅ Загружено ${data.length} записей из Supabase`);
-          setTrades(data);
+          const unique = dedupeBySellerAndItem(data);
+          console.log(`✅ Загружено ${data.length} записей из Supabase -> ${unique.length} unique seller/item`);
+          setTrades(unique);
           setUsingDemoData(false);
           return;
         }
