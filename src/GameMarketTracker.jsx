@@ -1,20 +1,20 @@
-import React, { useState, useEffect } from 'react';
-import { Search, TrendingDown, TrendingUp, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
+﻿import React, { useEffect, useMemo, useState } from 'react';
+import { Search, TrendingDown, TrendingUp, ChevronDown, ChevronUp, AlertCircle, Copy } from 'lucide-react';
 import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Bar, Line } from 'recharts';
 import { supabase } from './supabaseClient';
 
-// Временные диапазоны в UI
+// Р’СЂРµРјРµРЅРЅС‹Рµ РґРёР°РїР°Р·РѕРЅС‹ РІ UI
 const timeRanges = [
-  { label: '1ч', value: '1h' },
-  { label: '2ч', value: '2h' },
-  { label: '3ч', value: '3h' },
-  { label: '6ч', value: '6h' },
-  { label: '12ч', value: '12h' },
-  { label: '24ч', value: '24h' },
-  { label: '3д', value: '3d' },
-  { label: '7д', value: '7d' },
-  { label: '14д', value: '14d' },
-  { label: '30д', value: '30d' },
+  { label: '1С‡', value: '1h' },
+  { label: '2С‡', value: '2h' },
+  { label: '3С‡', value: '3h' },
+  { label: '6С‡', value: '6h' },
+  { label: '12С‡', value: '12h' },
+  { label: '24С‡', value: '24h' },
+  { label: '3Рґ', value: '3d' },
+  { label: '7Рґ', value: '7d' },
+  { label: '14Рґ', value: '14d' },
+  { label: '30Рґ', value: '30d' },
 ];
 
 const RANGE_CONFIG = {
@@ -30,7 +30,19 @@ const RANGE_CONFIG = {
   '30d': { durationMs: 30 * 24 * 60 * 60 * 1000, bucketMs: 24 * 60 * 60 * 1000 },
 };
 
-// Вспомогательные функции
+const currencyOptions = [
+  { label: 'Adena', value: 'adena' },
+  { label: 'MasterCoin', value: 'mastercoin' },
+];
+
+const normalizeCurrency = (value) => {
+  const normalized = (value || '').trim().toLowerCase();
+  if (['mastercoin', 'master coin', 'master_coin'].includes(normalized)) return 'mastercoin';
+  if (['adena', 'адена'].includes(normalized)) return 'adena';
+  return normalized;
+};
+
+// Р’СЃРїРѕРјРѕРіР°С‚РµР»СЊРЅС‹Рµ С„СѓРЅРєС†РёРё
 function groupTradesByItem(trades) {
   const map = {};
   for (const t of trades) {
@@ -125,7 +137,7 @@ function buildItemsFromTrades(trades) {
       .slice(-5)
       .map((t) => ({
         seller: t.seller_name || 'Unknown',
-        currency: t.currency || 'Gold',
+        currency: t.currency || 'Adena',
         pricePerUnit: t.price || 0,
         quantity: t.quantity || 0,
       }))
@@ -136,7 +148,7 @@ function buildItemsFromTrades(trades) {
       name: itemName,
       totalQuantity,
       minPrice: Number.isFinite(minPrice) ? minPrice : 0,
-      currency: last?.currency || 'Gold',
+      currency: last?.currency || 'Adena',
       priceChange,
       listings,
       tradeHistory: {
@@ -155,20 +167,21 @@ function buildItemsFromTrades(trades) {
   });
 }
 
-// Генерация демо-данных
+// Р“РµРЅРµСЂР°С†РёСЏ РґРµРјРѕ-РґР°РЅРЅС‹С…
 function generateDemoData() {
   const demoTrades = [];
-  const itemNames = ['Железный меч', 'Зелье здоровья', 'Кожаная броня', 'Магический кристалл', 'Эликсир маны'];
+  const itemNames = ['Demo Item 1', 'Demo Item 2', 'Demo Item 3', 'Demo Item 4', 'Demo Item 5'];
   const now = Date.now();
   
   for (let i = 0; i < 150; i++) {
-    const hoursAgo = Math.random() * 168; // последние 7 дней
+    const hoursAgo = Math.random() * 168; // last 7 days
+    const currency = Math.random() > 0.5 ? 'Adena' : 'MasterCoin';
     demoTrades.push({
       item_name: itemNames[Math.floor(Math.random() * itemNames.length)],
       price: Math.floor(Math.random() * 500) + 50,
       quantity: Math.floor(Math.random() * 10) + 1,
-      currency: 'Gold',
-      seller_name: `Игрок${Math.floor(Math.random() * 100)}`,
+      currency,
+      seller_name: `DemoSeller${Math.floor(Math.random() * 100)}`,
       created_at: new Date(now - hoursAgo * 60 * 60 * 1000).toISOString(),
     });
   }
@@ -176,8 +189,8 @@ function generateDemoData() {
   return demoTrades;
 }
 
-// Tooltip для графика
-const CustomTooltip = ({ active, payload, label }) => {
+// Tooltip РґР»СЏ РіСЂР°С„РёРєР°
+const CustomTooltip = ({ active, payload, label, currencyLabel }) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-slate-800/95 border border-slate-700 rounded-lg p-3 shadow-xl">
@@ -185,16 +198,16 @@ const CustomTooltip = ({ active, payload, label }) => {
         {payload.map((entry, index) => (
           <div key={index} className="text-sm">
             {entry.name === 'avgPrice' && (
-              <p className="text-blue-400">Средняя: {entry.value} Gold</p>
+              <p className="text-blue-400">РЎСЂРµРґРЅСЏСЏ: {entry.value} {currencyLabel}</p>
             )}
             {entry.name === 'minPrice' && (
-              <p className="text-green-400">Минимум: {entry.value} Gold</p>
+              <p className="text-green-400">РњРёРЅРёРјСѓРј: {entry.value} {currencyLabel}</p>
             )}
             {entry.name === 'maxPrice' && (
-              <p className="text-red-400">Максимум: {entry.value} Gold</p>
+              <p className="text-red-400">РњР°РєСЃРёРјСѓРј: {entry.value} {currencyLabel}</p>
             )}
             {entry.name === 'volume' && (
-              <p className="text-purple-400">Продано: {entry.value} шт</p>
+              <p className="text-purple-400">РџСЂРѕРґР°РЅРѕ: {entry.value} С€С‚</p>
             )}
           </div>
         ))}
@@ -204,64 +217,62 @@ const CustomTooltip = ({ active, payload, label }) => {
   return null;
 };
 
-// Основной компонент
+// РћСЃРЅРѕРІРЅРѕР№ РєРѕРјРїРѕРЅРµРЅС‚
 export default function GameMarketTracker() {
-  const [items, setItems] = useState([]);
+  const [trades, setTrades] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedItem, setExpandedItem] = useState(null);
   const [selectedTimeRange, setSelectedTimeRange] = useState('24h');
-  const [viewMode, setViewMode] = useState('items');
   const [usingDemoData, setUsingDemoData] = useState(false);
+  const [selectedCurrency, setSelectedCurrency] = useState('adena');
+  const [autoCurrencySet, setAutoCurrencySet] = useState(false);
 
-  // Загрузка данных из Supabase с fallback на демо-данные
+  // Р—Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С… РёР· Supabase СЃ fallback РЅР° РґРµРјРѕ-РґР°РЅРЅС‹Рµ
   useEffect(() => {
     async function loadData() {
       setLoading(true);
       setError(null);
       
       try {
-        // Попытка загрузить данные из Supabase
+        // РџРѕРїС‹С‚РєР° Р·Р°РіСЂСѓР·РёС‚СЊ РґР°РЅРЅС‹Рµ РёР· Supabase
         const { data, error } = await supabase
           .from('Trade')
           .select('*')
           .order('created_at', { ascending: true });
         
         if (error) {
-          console.warn('Ошибка Supabase:', error.message);
+          console.warn('РћС€РёР±РєР° Supabase:', error.message);
           throw error;
         }
         
-        // Если получили хотя бы 1 строку - используем реальные данные
+        // Р•СЃР»Рё РїРѕР»СѓС‡РёР»Рё С…РѕС‚СЏ Р±С‹ 1 СЃС‚СЂРѕРєСѓ - РёСЃРїРѕР»СЊР·СѓРµРј СЂРµР°Р»СЊРЅС‹Рµ РґР°РЅРЅС‹Рµ
         if (data && data.length > 0) {
-          console.log(`✅ Загружено ${data.length} записей из Supabase`);
-          const itemsFromTrades = buildItemsFromTrades(data);
-          setItems(itemsFromTrades);
+          console.log(`вњ… Р—Р°РіСЂСѓР¶РµРЅРѕ ${data.length} Р·Р°РїРёСЃРµР№ РёР· Supabase`);
+          setTrades(data);
           setUsingDemoData(false);
           return;
         }
         
-        // Если база пустая
-        console.log('⚠️ База данных пуста. Используются демо-данные.');
+        // Р•СЃР»Рё Р±Р°Р·Р° РїСѓСЃС‚Р°СЏ
+        console.log('вљ пёЏ Р‘Р°Р·Р° РґР°РЅРЅС‹С… РїСѓСЃС‚Р°. РСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґРµРјРѕ-РґР°РЅРЅС‹Рµ.');
         const demoTrades = generateDemoData();
-        const itemsFromTrades = buildItemsFromTrades(demoTrades);
-        setItems(itemsFromTrades);
+        setTrades(demoTrades);
         setUsingDemoData(true);
         
       } catch (err) {
-        console.error('❌ Ошибка подключения к Supabase:', err.message);
-        console.log('🔄 Используются демо-данные для демонстрации интерфейса');
+        console.error('вќЊ РћС€РёР±РєР° РїРѕРґРєР»СЋС‡РµРЅРёСЏ Рє Supabase:', err.message);
+        console.log('рџ”„ РСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґРµРјРѕ-РґР°РЅРЅС‹Рµ РґР»СЏ РґРµРјРѕРЅСЃС‚СЂР°С†РёРё РёРЅС‚РµСЂС„РµР№СЃР°');
         
-        // Fallback на демо-данные
+        // Fallback РЅР° РґРµРјРѕ-РґР°РЅРЅС‹Рµ
         const demoTrades = generateDemoData();
-        const itemsFromTrades = buildItemsFromTrades(demoTrades);
-        setItems(itemsFromTrades);
+        setTrades(demoTrades);
         setUsingDemoData(true);
         
-        // Показываем предупреждение только если это не просто пустая база
+        // РџРѕРєР°Р·С‹РІР°РµРј РїСЂРµРґСѓРїСЂРµР¶РґРµРЅРёРµ С‚РѕР»СЊРєРѕ РµСЃР»Рё СЌС‚Рѕ РЅРµ РїСЂРѕСЃС‚Рѕ РїСѓСЃС‚Р°СЏ Р±Р°Р·Р°
         if (!err.message.includes('pgrst116')) {
-          setError('Не удалось подключиться к базе данных. Показаны демо-данные.');
+          setError('РќРµ СѓРґР°Р»РѕСЃСЊ РїРѕРґРєР»СЋС‡РёС‚СЊСЃСЏ Рє Р±Р°Р·Рµ РґР°РЅРЅС‹С…. РџРѕРєР°Р·Р°РЅС‹ РґРµРјРѕ-РґР°РЅРЅС‹Рµ.');
         }
       } finally {
         setLoading(false);
@@ -271,7 +282,41 @@ export default function GameMarketTracker() {
     loadData();
   }, []);
 
-  const filteredItems = items.filter((item) =>
+  useEffect(() => {
+    if (trades.length === 0 || autoCurrencySet) return;
+
+    const hasSelectedCurrency = trades.some(
+      (trade) => normalizeCurrency(trade.currency || 'adena') === selectedCurrency
+    );
+
+    if (!hasSelectedCurrency) {
+      const firstCurrency = normalizeCurrency(trades[0].currency || 'adena') || 'adena';
+      if (firstCurrency !== selectedCurrency) {
+        setSelectedCurrency(firstCurrency);
+      }
+    }
+
+    setAutoCurrencySet(true);
+  }, [trades, selectedCurrency, autoCurrencySet]);
+
+  const currencyLabel =
+    currencyOptions.find((option) => option.value === selectedCurrency)?.label || 'Adena';
+
+  const tradesForCurrency = useMemo(
+    () =>
+      trades.filter((trade) => {
+        const tradeCurrency = normalizeCurrency(trade.currency || 'adena');
+        return tradeCurrency === selectedCurrency;
+      }),
+    [trades, selectedCurrency]
+  );
+
+  const itemsByCurrency = useMemo(
+    () => buildItemsFromTrades(tradesForCurrency),
+    [tradesForCurrency]
+  );
+
+  const filteredItems = itemsByCurrency.filter((item) =>
     item.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -283,12 +328,21 @@ export default function GameMarketTracker() {
     return item.tradeHistory[selectedTimeRange] || [];
   };
 
+  const handleCopyTarget = (sellerName) => {
+    const targetText = `/target ${sellerName}`;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(targetText).catch((err) => {
+        console.error('Clipboard write failed', err);
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className="text-slate-300 text-lg">Загрузка данных...</p>
+          <p className="text-slate-300 text-lg">Р—Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С…...</p>
         </div>
       </div>
     );
@@ -299,16 +353,16 @@ export default function GameMarketTracker() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-2">
-            Market Tracker
+            РљРѕСЂРјСѓС€РєР°
           </h1>
-          <p className="text-slate-400">Отслеживайте цены и объёмы торговли</p>
+          <p className="text-slate-400">РќР°РєРѕСЂРјСЏС‚ Р»Рё РЅР°СЃ СЃРµРіРѕРґРЅСЏ РµРґРѕР№ РёР»Рё...?</p>
           
-          {/* Индикатор режима данных */}
+          {/* РРЅРґРёРєР°С‚РѕСЂ СЂРµР¶РёРјР° РґР°РЅРЅС‹С… */}
           {usingDemoData && (
             <div className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg">
               <AlertCircle size={18} className="text-amber-400" />
               <span className="text-amber-300 text-sm">
-                Используются демо-данные. Настройте Supabase для реальных данных.
+                РСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РґРµРјРѕ-РґР°РЅРЅС‹Рµ. РќР°СЃС‚СЂРѕР№С‚Рµ Supabase РґР»СЏ СЂРµР°Р»СЊРЅС‹С… РґР°РЅРЅС‹С….
               </span>
             </div>
           )}
@@ -326,7 +380,7 @@ export default function GameMarketTracker() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" size={20} />
             <input
               type="text"
-              placeholder="Поиск предмета..."
+              placeholder="РџРѕРёСЃРє РїСЂРµРґРјРµС‚Р°..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700/50 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-100 placeholder-slate-400"
@@ -335,7 +389,26 @@ export default function GameMarketTracker() {
         </div>
 
         <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4 mb-6">
-          <label className="text-slate-300 font-medium mb-3 block">Временной диапазон:</label>
+          <label className="text-slate-300 font-medium mb-3 block">Валюта:</label>
+          <div className="flex flex-wrap gap-2">
+            {currencyOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setSelectedCurrency(option.value)}
+                className={`px-3 py-1.5 rounded text-sm transition-all ${
+                  selectedCurrency === option.value
+                    ? 'bg-emerald-500 text-white'
+                    : 'bg-slate-700/50 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50 p-4 mb-6">
+          <label className="text-slate-300 font-medium mb-3 block">Валюта:</label>
           <div className="flex flex-wrap gap-2">
             {timeRanges.map((range) => (
               <button
@@ -356,9 +429,9 @@ export default function GameMarketTracker() {
         <div className="space-y-4">
           {filteredItems.length === 0 ? (
             <div className="text-center py-12 text-slate-400 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50">
-              <p className="text-lg">Предметы не найдены</p>
+              <p className="text-lg">РџСЂРµРґРјРµС‚С‹ РЅРµ РЅР°Р№РґРµРЅС‹</p>
               {searchTerm && (
-                <p className="text-sm mt-2">Попробуйте изменить поисковый запрос</p>
+                <p className="text-sm mt-2">РџРѕРїСЂРѕР±СѓР№С‚Рµ РёР·РјРµРЅРёС‚СЊ РїРѕРёСЃРєРѕРІС‹Р№ Р·Р°РїСЂРѕСЃ</p>
               )}
             </div>
           ) : (
@@ -379,8 +452,8 @@ export default function GameMarketTracker() {
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-slate-100 mb-1">{item.name}</h3>
                         <div className="flex gap-4 text-sm text-slate-400">
-                          <span>На рынке: <span className="text-slate-200">{item.totalQuantity}</span></span>
-                          <span>Мин. цена: <span className="text-slate-200">{item.minPrice} {item.currency}</span></span>
+                          <span>РќР° СЂС‹РЅРєРµ: <span className="text-slate-200">{item.totalQuantity}</span></span>
+                          <span>РњРёРЅ. С†РµРЅР°: <span className="text-slate-200">{item.minPrice} {currencyLabel}</span></span>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
@@ -399,7 +472,7 @@ export default function GameMarketTracker() {
                     <div className="border-t border-slate-700/50 p-6 space-y-6">
                       <div>
                         <h4 className="text-slate-300 font-semibold mb-4">
-                          График цен и объёма торгов ({selectedTimeRange})
+                          Р“СЂР°С„РёРє С†РµРЅ Рё РѕР±СЉС‘РјР° С‚РѕСЂРіРѕРІ ({selectedTimeRange})
                         </h4>
                         {tradeData.length > 0 ? (
                           <ResponsiveContainer width="100%" height={300}>
@@ -408,14 +481,18 @@ export default function GameMarketTracker() {
                               <XAxis dataKey="time" stroke="#94a3b8" />
                               <YAxis yAxisId="left" stroke="#94a3b8" />
                               <YAxis yAxisId="right" orientation="right" stroke="#94a3b8" />
-                              <Tooltip content={<CustomTooltip />} />
+                              <Tooltip
+                                content={(props) => (
+                                  <CustomTooltip {...props} currencyLabel={currencyLabel} />
+                                )}
+                              />
                               <Legend
                                 formatter={(value) => {
                                   const labels = {
-                                    avgPrice: 'Средняя цена',
-                                    minPrice: 'Мин. цена',
-                                    maxPrice: 'Макс. цена',
-                                    volume: 'Объём продаж',
+                                    avgPrice: 'РЎСЂРµРґРЅСЏСЏ С†РµРЅР°',
+                                    minPrice: 'РњРёРЅ. С†РµРЅР°',
+                                    maxPrice: 'РњР°РєСЃ. С†РµРЅР°',
+                                    volume: 'РћР±СЉС‘Рј РїСЂРѕРґР°Р¶',
                                   };
                                   return labels[value] || value;
                                 }}
@@ -428,56 +505,68 @@ export default function GameMarketTracker() {
                           </ResponsiveContainer>
                         ) : (
                           <div className="text-center py-8 text-slate-400">
-                            Нет данных за выбранный период
+                            РќРµС‚ РґР°РЅРЅС‹С… Р·Р° РІС‹Р±СЂР°РЅРЅС‹Р№ РїРµСЂРёРѕРґ
                           </div>
                         )}
                       </div>
 
                       <div className="grid grid-cols-4 gap-4">
                         <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-                          <div className="text-blue-400 text-sm mb-1">Средняя цена</div>
+                          <div className="text-blue-400 text-sm mb-1">РЎСЂРµРґРЅСЏСЏ С†РµРЅР°</div>
                           <div className="text-slate-100 font-semibold">
-                            {lastPoint ? lastPoint.avgPrice.toFixed(2) : '—'} Gold
+                            {lastPoint ? lastPoint.avgPrice.toFixed(2) : "-"} {currencyLabel}
                           </div>
                         </div>
                         <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-                          <div className="text-green-400 text-sm mb-1">Мин. цена</div>
+                          <div className="text-green-400 text-sm mb-1">РњРёРЅ. С†РµРЅР°</div>
                           <div className="text-slate-100 font-semibold">
-                            {lastPoint ? lastPoint.minPrice.toFixed(2) : '—'} Gold
+                            {lastPoint ? lastPoint.minPrice.toFixed(2) : "-"} {currencyLabel}
                           </div>
                         </div>
                         <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                          <div className="text-red-400 text-sm mb-1">Макс. цена</div>
+                          <div className="text-red-400 text-sm mb-1">РњР°РєСЃ. С†РµРЅР°</div>
                           <div className="text-slate-100 font-semibold">
-                            {lastPoint ? lastPoint.maxPrice.toFixed(2) : '—'} Gold
+                            {lastPoint ? lastPoint.maxPrice.toFixed(2) : "-"} {currencyLabel}
                           </div>
                         </div>
                         <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-                          <div className="text-purple-400 text-sm mb-1">Всего продано</div>
+                          <div className="text-purple-400 text-sm mb-1">Р’СЃРµРіРѕ РїСЂРѕРґР°РЅРѕ</div>
                           <div className="text-slate-100 font-semibold">
-                            {tradeData.reduce((sum, d) => sum + d.volume, 0)} шт
+                            {tradeData.reduce((sum, d) => sum + d.volume, 0)} С€С‚
                           </div>
                         </div>
                       </div>
 
                       <div>
-                        <h4 className="text-slate-300 font-semibold mb-3">Текущие предложения на рынке</h4>
+                        <h4 className="text-slate-300 font-semibold mb-3">РўРµРєСѓС‰РёРµ РїСЂРµРґР»РѕР¶РµРЅРёСЏ РЅР° СЂС‹РЅРєРµ</h4>
                         <div className="overflow-x-auto">
                           <table className="w-full text-sm">
                             <thead>
                               <tr className="border-b border-slate-700">
-                                <th className="text-left py-2 px-3 text-slate-400 font-medium">Продавец</th>
-                                <th className="text-left py-2 px-3 text-slate-400 font-medium">Валюта</th>
-                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Цена/шт</th>
-                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Количество</th>
-                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Всего</th>
+                                <th className="text-left py-2 px-3 text-slate-400 font-medium">РџСЂРѕРґР°РІРµС†</th>
+                                <th className="text-left py-2 px-3 text-slate-400 font-medium">Р’Р°Р»СЋС‚Р°</th>
+                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Р¦РµРЅР°/С€С‚</th>
+                                <th className="text-right py-2 px-3 text-slate-400 font-medium">РљРѕР»РёС‡РµСЃС‚РІРѕ</th>
+                                <th className="text-right py-2 px-3 text-slate-400 font-medium">Р’СЃРµРіРѕ</th>
                               </tr>
                             </thead>
                             <tbody>
                               {item.listings.map((listing, idx) => (
                                 <tr key={idx} className="border-b border-slate-700/50 hover:bg-slate-700/20">
-                                  <td className="py-2 px-3 text-slate-200">{listing.seller}</td>
-                                  <td className="py-2 px-3 text-slate-300">{listing.currency}</td>
+                                  <td className="py-2 px-3 text-slate-200">
+                                    <div className="flex items-center gap-2">
+                                      <span>{listing.seller}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyTarget(listing.seller)}
+                                        className="p-1 rounded hover:bg-slate-700 text-slate-400 hover:text-slate-100 transition-colors"
+                                        title="Скопировать /target"
+                                      >
+                                        <Copy size={14} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-300">{currencyLabel}</td>
                                   <td className="py-2 px-3 text-right text-slate-200">{listing.pricePerUnit}</td>
                                   <td className="py-2 px-3 text-right text-slate-200">{listing.quantity}</td>
                                   <td className="py-2 px-3 text-right text-slate-100 font-semibold">
@@ -500,3 +589,4 @@ export default function GameMarketTracker() {
     </div>
   );
 }
+
