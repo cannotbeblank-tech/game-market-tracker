@@ -224,7 +224,7 @@ export default function GameMarketTracker() {
       try {
         // Попытка загрузить данные из Supabase
         const { data, error } = await supabase
-          .from('Trades')
+          .from('Trade')
           .select('*')
           .order('created_at', { ascending: true });
         
