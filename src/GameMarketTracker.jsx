@@ -353,9 +353,9 @@ export default function GameMarketTracker() {
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-2">
-            Market Tracker
+            Кормушка
           </h1>
-          <p className="text-slate-400">Отслеживайте цены и объёмы торговли</p>
+          <p className="text-slate-400">Накормят ли нас сегодня едой или..?</p>
           
           {/* Индикатор режима данных */}
           {usingDemoData && (
